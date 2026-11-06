@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const pool = require("./config/db");
 const redis = require("./config/redis");
+const authRoutes = require("./modules/auth/auth.routes");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 
 const app = express();
@@ -13,7 +14,6 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Health check: checks DB and Redis both
 app.get("/health", async (req, res, next) => {
   try {
     await pool.query("SELECT 1");
@@ -23,6 +23,8 @@ app.get("/health", async (req, res, next) => {
     next(err);
   }
 });
+
+app.use("/api/auth", authRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
