@@ -5,6 +5,9 @@ const morgan = require("morgan");
 const pool = require("./config/db");
 const redis = require("./config/redis");
 const authRoutes = require("./modules/auth/auth.routes");
+const movieRoutes = require("./modules/movies/movies.routes");
+const theatreRoutes = require("./modules/theatres/theatres.routes");
+const showRoutes = require("./modules/shows/shows.routes");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 
 const app = express();
@@ -25,6 +28,9 @@ app.get("/health", async (req, res, next) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/movies", movieRoutes);
+app.use("/api/theatres", theatreRoutes);
+app.use("/api/shows", showRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
