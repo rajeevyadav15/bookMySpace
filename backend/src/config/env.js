@@ -1,5 +1,3 @@
-
-
 require("dotenv").config();
 
 if (!process.env.JWT_SECRET) {
@@ -13,4 +11,5 @@ module.exports = {
   nodeEnv: process.env.NODE_ENV || "development",
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  seatHoldSeconds: Number(process.env.SEAT_HOLD_SECONDS) || 300,
 };

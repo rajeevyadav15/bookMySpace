@@ -1,5 +1,6 @@
 const pool = require("../../config/db");
 const ApiError = require("../../utils/ApiError");
+const seatLock = require("../booking/seatLock");
 
 const CLEANING_BUFFER_MIN = 15; // gap after movie for cleaning
 
@@ -75,6 +76,7 @@ async function list({ movieId, city, date }) {
 }
 
 // Show details + full seat map with price per seat
+// Show details + full seat map with price and live status per seat
 async function getById(id) {
   const showRes = await pool.query(
     `SELECT s.id, s.start_time, s.end_time, s.price_regular, s.price_premium,
@@ -101,7 +103,25 @@ async function getById(id) {
     [id]
   );
 
-  return { show: showRes.rows[0], seats: seatsRes.rows };
+  const seatIds = seatsRes.rows.map((s) => s.id);
+
+  const [bookedRes, owners] = await Promise.all([
+    pool.query(
+      "SELECT seat_id FROM booking_seats WHERE show_id = $1 AND is_active = TRUE",
+      [id]
+    ),
+    // If Redis is down, map still loads (without held info)
+    seatLock.getOwners(id, seatIds).catch(() => seatIds.map(() => null)),
+  ]);
+
+  const booked = new Set(bookedRes.rows.map((r) => r.seat_id));
+
+  const seats = seatsRes.rows.map((seat, i) => ({
+    ...seat,
+    status: booked.has(seat.id) ? "booked" : owners[i] ? "held" : "available",
+  }));
+
+  return { show: showRes.rows[0], seats };
 }
 
 module.exports = { create, list, getById };
