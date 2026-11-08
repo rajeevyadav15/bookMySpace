@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 
 const nodeEnv = process.env.NODE_ENV || "development";
 const paymentMode = process.env.PAYMENT_MODE || "razorpay";
@@ -48,4 +48,11 @@ module.exports = {
     pass: process.env.SMTP_PASS,
   },
   mailFrom: process.env.MAIL_FROM || "BookMySpace <no-reply@bookmyspace.local>",
+
+  // AI (any OpenAI compatible provider: Gemini, Groq, OpenRouter...)
+  aiApiKey: process.env.AI_API_KEY,
+  aiBaseUrl:
+    process.env.AI_BASE_URL ||
+    "https://generativelanguage.googleapis.com/v1beta/openai/",
+  aiModel: process.env.AI_MODEL || "gemini-3.8-flash",
 };

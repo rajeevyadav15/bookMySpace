@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const aiRoutes = require("./modules/ai/ai.routes");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const pool = require("./config/db");
@@ -39,6 +40,7 @@ app.use("/api/theatres", theatreRoutes);
 app.use("/api/shows", showRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
