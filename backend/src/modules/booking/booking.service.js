@@ -160,6 +160,52 @@ async function cleanupHold(hold, userId) {
   }
 }
 
+
+// ---------- CREATE BOOKING (shared by confirm and payment) ----------
+async function createBooking({ userId, showId, holdId, seats, totalAmount }) {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const bookingRes = await client.query(
+      `INSERT INTO bookings (user_id, show_id, hold_id, total_amount)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [userId, showId, holdId, totalAmount]
+    );
+    const bookingId = bookingRes.rows[0].id;
+
+    await client.query(
+      `INSERT INTO booking_seats (booking_id, show_id, seat_id, price)
+       SELECT $1::uuid, $2::uuid, x.seat_id, x.price
+       FROM unnest($3::uuid[], $4::numeric[]) AS x(seat_id, price)`,
+      [bookingId, showId, seats.map((s) => s.id), seats.map((s) => s.price)]
+    );
+
+    await client.query("COMMIT");
+    return { bookingId, replayed: false };
+  } catch (err) {
+    await client.query("ROLLBACK");
+
+    if (err.code === "23505") {
+      if (err.constraint === "uniq_active_seat_per_show") {
+        throw new ApiError(409, "Seat already booked");
+      }
+      // Same hold confirmed twice at the same moment
+      const dup = await pool.query(
+        "SELECT id FROM bookings WHERE hold_id = $1 AND user_id = $2",
+        [holdId, userId]
+      );
+      if (dup.rows[0]) return { bookingId: dup.rows[0].id, replayed: true };
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------- CONFIRM (direct, only for tests and mock mode) ----------
 async function confirmBooking(userId, holdId) {
   // Idempotency: same hold confirmed again returns the same booking
   const existing = await pool.query(
@@ -185,61 +231,19 @@ async function confirmBooking(userId, holdId) {
     throw new ApiError(410, "Seat lock expired. Please select seats again");
   }
 
-  let bookingId;
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const bookingRes = await client.query(
-      `INSERT INTO bookings (user_id, show_id, hold_id, total_amount)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id`,
-      [userId, hold.showId, holdId, hold.totalAmount]
-    );
-    bookingId = bookingRes.rows[0].id;
-
-    await client.query(
-      `INSERT INTO booking_seats (booking_id, show_id, seat_id, price)
-       SELECT $1::uuid, $2::uuid, x.seat_id, x.price
-       FROM unnest($3::uuid[], $4::numeric[]) AS x(seat_id, price)`,
-      [
-        bookingId,
-        hold.showId,
-        hold.seats.map((s) => s.id),
-        hold.seats.map((s) => s.price),
-      ]
-    );
-
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-
-    if (err.code === "23505") {
-      if (err.constraint === "uniq_active_seat_per_show") {
-        throw new ApiError(409, "Seat already booked");
-      }
-      // Same hold confirmed twice at the same moment
-      const dup = await pool.query(
-        "SELECT id FROM bookings WHERE hold_id = $1 AND user_id = $2",
-        [holdId, userId]
-      );
-      if (dup.rows[0]) {
-        const booking = await getById(dup.rows[0].id, { id: userId });
-        return { booking, replayed: true };
-      }
-    }
-    throw err;
-  } finally {
-    client.release();
-  }
+  const { bookingId, replayed } = await createBooking({
+    userId,
+    showId: hold.showId,
+    holdId,
+    seats: hold.seats,
+    totalAmount: hold.totalAmount,
+  });
 
   await cleanupHold(hold, userId);
 
   const booking = await getById(bookingId, { id: userId });
-  return { booking, replayed: false };
+  return { booking, replayed };
 }
-
 // ---------- READ ----------
 async function getById(bookingId, user) {
   const { rows } = await pool.query(
@@ -324,6 +328,7 @@ async function cancel(user, bookingId) {
 module.exports = {
   holdSeats,
   releaseHold,
+   createBooking,
   confirmBooking,
   getById,
   listMine,

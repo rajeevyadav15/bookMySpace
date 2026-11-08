@@ -1,4 +1,7 @@
 const service = require("./booking.service");
+const paymentService = require("../payments/payments.service");
+const env = require("../../config/env");
+const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
 
 exports.hold = asyncHandler(async (req, res) => {
@@ -11,7 +14,12 @@ exports.releaseHold = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "Hold released" });
 });
 
+// Without this guard anyone could get free tickets
 exports.confirm = asyncHandler(async (req, res) => {
+  if (!env.allowDirectConfirm) {
+    throw new ApiError(403, "Direct confirm is disabled. Please pay first");
+  }
+
   const { booking, replayed } = await service.confirmBooking(
     req.user.id,
     req.body.holdId
@@ -31,5 +39,7 @@ exports.getOne = asyncHandler(async (req, res) => {
 
 exports.cancel = asyncHandler(async (req, res) => {
   const booking = await service.cancel(req.user, req.params.id);
-  res.json({ success: true, booking });
+  // Money goes back if this booking was paid
+  const refund = await paymentService.refundForBooking(booking.id);
+  res.json({ success: true, booking, refund });
 });

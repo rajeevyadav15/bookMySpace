@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pay test</title>
+</head>
+<body style="font-family: sans-serif; max-width: 480px; margin: 40px auto;">
+  <h3>Razorpay test (dev only)</h3>
+  <input id="token" placeholder="JWT token" style="width: 100%;"><br><br>
+  <input id="holdId" placeholder="holdId" style="width: 100%;"><br><br>
+  <button id="payBtn">Pay</button>
+  <pre id="out"></pre>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    const API = "http://localhost:5000/api";
+    const out = document.getElementById("out");
+    const log = (x) => (out.textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2));
+
+    async function post(path, body) {
+      const res = await fetch(API + path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + document.getElementById("token").value.trim(),
+        },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, data: await res.json() };
+    }
+
+    document.getElementById("payBtn").onclick = async () => {
+      const holdId = document.getElementById("holdId").value.trim();
+      const order = await post("/payments/order", { holdId });
+      if (order.status !== 201) return log(order);
+
+      const o = order.data.order;
+      new Razorpay({
+        key: o.keyId,
+        amount: o.amount,
+        currency: o.currency,
+        order_id: o.orderId,
+        name: "BookMySpace",
+        handler: async (r) => {
+          const result = await post("/payments/verify", {
+            razorpayOrderId: r.razorpay_order_id,
+            razorpayPaymentId: r.razorpay_payment_id,
+            razorpaySignature: r.razorpay_signature,
+          });
+          log(result);
+        },
+      }).open();
+    };
+  </script>
+</body>
+</html>
