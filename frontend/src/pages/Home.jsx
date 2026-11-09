@@ -4,6 +4,7 @@ import { qs } from "../utils/qs";
 import useDebounce from "../hooks/useDebounce";
 import MovieCard from "../components/MovieCard";
 import { inputCls } from "../components/styles";
+import Recommendations from "../components/Recommendations";
 
 const LIMIT = 12;
 
@@ -43,6 +44,7 @@ export default function Home() {
 
   return (
     <div>
+        <Recommendations />
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">Now showing</h1>
         <input

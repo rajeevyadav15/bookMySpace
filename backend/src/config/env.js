@@ -1,8 +1,16 @@
 require("dotenv").config({ quiet: true });
 
 const nodeEnv = process.env.NODE_ENV || "development";
+const isProd = nodeEnv === "production";
 const paymentMode = process.env.PAYMENT_MODE || "razorpay";
 const isMock = paymentMode === "mock";
+const allowDemoPayments = process.env.ALLOW_DEMO_PAYMENTS === "true";
+
+const list = (value) =>
+  (value || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
 
 if (!process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET is missing in .env");
@@ -10,9 +18,17 @@ if (!process.env.JWT_SECRET) {
 if (!["mock", "razorpay"].includes(paymentMode)) {
   throw new Error("PAYMENT_MODE must be 'mock' or 'razorpay'");
 }
-// Mock mode allows free booking, so it must never run in production
-if (isMock && nodeEnv === "production") {
-  throw new Error("PAYMENT_MODE=mock is not allowed in production");
+if (isProd && process.env.JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET must be at least 32 characters in production");
+}
+if (isProd && list(process.env.CORS_ORIGIN).length === 0) {
+  throw new Error("CORS_ORIGIN is required in production");
+}
+// Mock mode gives free tickets, so production needs an explicit demo flag
+if (isMock && isProd && !allowDemoPayments) {
+  throw new Error(
+    "PAYMENT_MODE=mock in production needs ALLOW_DEMO_PAYMENTS=true (demo only)"
+  );
 }
 if (!isMock && nodeEnv !== "test") {
   for (const key of ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"]) {
@@ -31,7 +47,14 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   seatHoldSeconds: Number(process.env.SEAT_HOLD_SECONDS) || 300,
 
+  // Empty list in development means "allow any origin"
+  corsOrigins: list(process.env.CORS_ORIGIN),
+  // Number of proxies in front of the app (nginx = 1)
+  trustProxy:
+    process.env.TRUST_PROXY === undefined ? 1 : Number(process.env.TRUST_PROXY) || 0,
+
   paymentMode,
+  allowDemoPayments,
   // Direct confirm (without payment) only for tests and mock mode
   allowDirectConfirm: nodeEnv === "test" || isMock,
   paymentHoldSeconds: Number(process.env.PAYMENT_HOLD_SECONDS) || 600,
@@ -54,5 +77,6 @@ module.exports = {
   aiBaseUrl:
     process.env.AI_BASE_URL ||
     "https://generativelanguage.googleapis.com/v1beta/openai/",
-  aiModel: process.env.AI_MODEL || "gemini-3.8-flash",
+  aiModel: process.env.AI_MODEL || "gemini-3.1-flash-lite",
+  aiFallbackModels: list(process.env.AI_FALLBACK_MODELS),
 };

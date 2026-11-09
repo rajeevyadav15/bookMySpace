@@ -14,7 +14,10 @@ export default function Navbar() {
         <div className="flex items-center gap-3 text-sm">
           {user ? (
             <>
-              <span className="hidden text-slate-300 sm:inline">Hi, {user.name}</span>
+              <Link to="/bookings" className="px-2 py-1.5 text-slate-300 hover:text-white">
+                My bookings
+              </Link>
+              <span className="hidden text-slate-400 md:inline">Hi, {user.name}</span>
               <button
                 onClick={logout}
                 className="rounded-lg bg-slate-800 px-3 py-1.5 hover:bg-slate-700"

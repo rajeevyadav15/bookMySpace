@@ -1,0 +1,78 @@
+name: bookmyspace
+
+# Shared settings for backend and worker
+x-backend: &backend
+  build: ./backend
+  image: bookmyspace-backend
+  env_file: ./backend/.env.docker
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bms
+      POSTGRES_PASSWORD: bms123
+      POSTGRES_DB: bookmyshow
+    volumes:
+      - full_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bms -d bookmyshow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Runs once, applies migrations, then exits
+  migrate:
+    build: ./backend
+    image: bookmyspace-backend
+    env_file: ./backend/.env.docker
+    command: ["node", "src/db/migrate.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  backend:
+    <<: *backend
+
+  worker:
+    <<: *backend
+    command: ["node", "src/worker.js"]
+    healthcheck:
+      disable: true
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+        VITE_PAYMENT_MODE: mock
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  full_pgdata:
