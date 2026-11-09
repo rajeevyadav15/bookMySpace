@@ -70,25 +70,45 @@ async function sendTicket(bookingId) {
   });
 }
 
-const worker = new Worker(
-  "email",
-  async (job) => {
-    if (job.name === "ticket") await sendTicket(job.data.bookingId);
-  },
-  { connection: createConnection(), concurrency: 5 }
-);
+// Used by server.js (embedded) and by the standalone worker below
+function startWorker() {
+  const connection = createConnection();
 
-worker.on("completed", (job) => console.log("Job done:", job.id));
-worker.on("failed", (job, err) =>
-  console.error("Job failed:", job && job.id, err.message)
-);
+  const worker = new Worker(
+    "email",
+    async (job) => {
+      if (job.name === "ticket") await sendTicket(job.data.bookingId);
+    },
+    { connection, concurrency: 5 }
+  );
 
-console.log("Email worker started");
+  worker.on("completed", (job) => console.log("Job done:", job.id));
+  worker.on("failed", (job, err) =>
+    console.error("Job failed:", job && job.id, err.message)
+  );
+  worker.on("error", (err) => console.error("Worker error:", err.message));
 
-async function shutdown() {
-  await worker.close();
-  await pool.end();
-  process.exit(0);
+  console.log("Email worker started");
+
+  return {
+    async close() {
+      await worker.close();
+      await connection.quit().catch(() => {});
+    },
+  };
 }
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+
+module.exports = { startWorker };
+
+// Direct run: npm run worker
+if (require.main === module) {
+  const handle = startWorker();
+
+  async function shutdown() {
+    await handle.close();
+    await pool.end();
+    process.exit(0);
+  }
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}

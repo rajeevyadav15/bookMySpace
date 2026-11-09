@@ -40,6 +40,8 @@ if (!isMock && nodeEnv !== "test") {
 
 module.exports = {
   port: process.env.PORT || 5000,
+    runMigrations: process.env.RUN_MIGRATIONS === "true",
+  embedWorker: process.env.EMBED_WORKER === "true",
   databaseUrl: process.env.DATABASE_URL,
   redisUrl: process.env.REDIS_URL,
   nodeEnv,
